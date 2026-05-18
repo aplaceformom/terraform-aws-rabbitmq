@@ -54,3 +54,7 @@ variable "instance_volume_iops" {
   default = "0"
 }
 
+variable "cookie_ssm_path" {
+  description = "SSM Parameter Store path for the Erlang cookie (SecureString). Read at instance boot so all nodes always use the same value regardless of launch time."
+}
+
