@@ -62,6 +62,26 @@ write_files:
         docker exec rabbitmq rabbitmqctl set_permissions -p / admin ".*" ".*" ".*"
         docker exec rabbitmq rabbitmqctl set_permissions -p / rabbit ".*" ".*" ".*"
         docker exec rabbitmq rabbitmqctl delete_user guest
+  - path: /root/start_rabbitmq.sh
+    content: |
+        #!/usr/bin/env bash
+        # Pull Erlang cookie from SSM at boot so all nodes always use the same value
+        # regardless of when the instance was launched or what LC version it came from.
+        ERLANG_COOKIE=$(aws ssm get-parameter \
+          --name '${cookie_ssm_path}' \
+          --with-decryption \
+          --query 'Parameter.Value' \
+          --output text \
+          --region '${region}')
+        docker run -d \
+          --name rabbitmq \
+          --hostname $HOSTNAME \
+          -p 4369:4369 -p 5672:5672 -p 15672:15672 -p 25672:25672 \
+          -e RABBITMQ_ERLANG_COOKIE="$ERLANG_COOKIE" \
+          -v /root/data:/var/lib/rabbitmq \
+          -v /root/conf/:/etc/rabbitmq \
+          -v /root/bin:/tmp/bin \
+          rabbitmq:3-management
 
 runcmd:
   - yum update -y
@@ -69,7 +89,7 @@ runcmd:
   - service docker start
   - chkconfig docker on
   - usermod -a -G docker ec2-user
-  - docker run -d --name rabbitmq --hostname $HOSTNAME -p 4369:4369 -p 5672:5672 -p 15672:15672 -p 25672:25672 -e RABBITMQ_ERLANG_COOKIE='${secret_cookie}' -v /root/data:/var/lib/rabbitmq -v /root/conf/:/etc/rabbitmq -v /root/bin:/tmp/bin rabbitmq:3-management
+  - bash /root/start_rabbitmq.sh
   - sleep 1
   - docker exec rabbitmq bash /tmp/bin/join_cluster.sh $(bash /root/find_hosts.sh)
   - sleep 1
