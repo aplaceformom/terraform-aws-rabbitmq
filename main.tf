@@ -5,9 +5,6 @@ data "aws_vpc" "vpc" {
 data "aws_region" "current" {
 }
 
-data "aws_caller_identity" "current" {
-}
-
 data "aws_ami" "ami" {
   owners = ["amazon"]
   most_recent = true
@@ -52,13 +49,13 @@ data "template_file" "cloud-init" {
   template = file("${path.module}/cloud-init.yaml")
 
   vars = {
-    sync_node_count  = 3
-    asg_name         = local.cluster_name
-    region           = data.aws_region.current.name
-    admin_password   = random_string.admin_password.result
-    rabbit_password  = random_string.rabbit_password.result
-    cookie_ssm_path  = var.cookie_ssm_path
-    message_timeout  = 3 * 24 * 60 * 60 * 1000 # 3 days
+    sync_node_count = 3
+    asg_name        = local.cluster_name
+    region          = data.aws_region.current.name
+    admin_password  = random_string.admin_password.result
+    rabbit_password = random_string.rabbit_password.result
+    secret_cookie   = random_string.secret_cookie.result
+    message_timeout = 3 * 24 * 60 * 60 * 1000 # 3 days
   }
 }
 
@@ -67,24 +64,28 @@ resource "aws_iam_role" "role" {
   assume_role_policy = data.aws_iam_policy_document.policy_doc.json
 }
 
-data "aws_iam_policy_document" "instance_policy" {
-  statement {
-    actions   = ["autoscaling:DescribeAutoScalingInstances", "ec2:DescribeInstances"]
-    resources = ["*"]
-  }
-
-  statement {
-    actions = ["ssm:GetParameter"]
-    resources = [
-      "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.cookie_ssm_path}"
-    ]
-  }
-}
-
 resource "aws_iam_role_policy" "policy" {
-  name   = local.cluster_name
-  role   = aws_iam_role.role.id
-  policy = data.aws_iam_policy_document.instance_policy.json
+  name = local.cluster_name
+  role = aws_iam_role.role.id
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "autoscaling:DescribeAutoScalingInstances",
+                "ec2:DescribeInstances"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+EOF
+
 }
 
 resource "aws_iam_instance_profile" "profile" {
@@ -116,7 +117,7 @@ resource "aws_security_group" "rabbitmq_nodes" {
 
   ingress {
     protocol  = -1
-    from_port = 0
+    from_from = 0
     to_port   = 0
     self      = true
   }
@@ -204,6 +205,13 @@ resource "aws_elb" "elb" {
     instance_port     = 15672
     instance_protocol = "http"
     lb_port           = 80
+    lb_protocol       = "http"
+  }
+
+  listener {
+    instance_port     = 15672
+    instance_protocol = "http"
+    lb_port           = 15672
     lb_protocol       = "http"
   }
 
