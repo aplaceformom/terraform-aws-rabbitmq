@@ -117,7 +117,7 @@ resource "aws_security_group" "rabbitmq_nodes" {
 
   ingress {
     protocol  = -1
-    from_from = 0
+    from_port = 0
     to_port   = 0
     self      = true
   }
