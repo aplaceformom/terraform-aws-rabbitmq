@@ -207,6 +207,13 @@ resource "aws_elb" "elb" {
     lb_protocol       = "http"
   }
 
+  listener {
+    instance_port     = 15672
+    instance_protocol = "http"
+    lb_port           = 15672
+    lb_protocol       = "http"
+  }
+
   health_check {
     interval            = 30
     unhealthy_threshold = 10
